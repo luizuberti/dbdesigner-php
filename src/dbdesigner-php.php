@@ -2,9 +2,26 @@
 	
 	class dbdesigner{	
 		private $xml;
+		private $adatatype;
+		private $ModelName;
+		private $VersionStr;
 		
 		function __construct($xml) {
 			$this->xml = simplexml_load_string($xml);
+			$this->SetDataType();
+			$this->ModelName = (string)$this->xml->SETTINGS->GLOBALSETTINGS['ModelName'];
+			$this->VersionStr = (string)$this->xml->SETTINGS->GLOBALSETTINGS['VersionStr'];
+			
+		}
+		
+		private function SetDataType(){
+			$xml = $this->xml;
+			$tmp_datatype = $xml->SETTINGS->DATATYPES->DATATYPE;
+			foreach($tmp_datatype as $linha){
+				$id   = (int)$linha['ID'];
+				$nome = (string)$linha['TypeName'];
+				$this->adatatype[$id]= $nome;
+			}
 		}
 		
 		public function gerasql(){
@@ -152,7 +169,7 @@
 				$sql_tabela .= implode(",\n",$aind);
 				$sql_tabela .= count($arel)>0 ? ",\n" :"";
 				$sql_tabela .= implode(",\n",$arel);
-				$sql_tabela .=")\nENGINE=InnoDB $tabela_comente;\n";
+				$sql_tabela .="\n)ENGINE=InnoDB $tabela_comente;\n";
 				$sql_tabela .="$StandardInserts\n";
 				
 				$sql .= $sql_tabela;
@@ -206,134 +223,7 @@
 		}
 		
 		public function tipo_coluna($cod){
-			$wret="";
-			switch ($cod){/*atribui as strings aos índices...*/
-				case 1:
-				$wret = "TINYINT";
-				break;
-				case 2:
-				$wret = "SMALLINT";
-				break;
-				case 3:
-				$wret = "MEDIUMINT";
-				break;
-				case 4:
-				$wret = "INT"; /*se for int, o mysql cria por padão int(11)*/
-				break;
-				case 5:
-				$wret = "INTEGER"; /*se for integer, o mysql cria por padão int(11)*/
-				break;
-				case 6:
-				$wret = "BIGINT";
-				break;
-				case 7:
-				$wret = "FLOAT";
-				break;
-				case 8:
-				$wret = "FLOAT";
-				break;
-				case 9:
-				$wret = "DOUBLE";
-				break;
-				case 10:
-				$wret = "DOUBLE PRECISION";
-				break;
-				case 11:
-				$wret = "REAL";
-				break;
-				case 12:
-				$wret = "DECIMAL";
-				break;
-				case 13:
-				$wret = "NUMERIC";
-				break;
-				case 14:
-				$wret = "DATE";
-				break;
-				case 15:
-				$wret = "DATETIME";
-				break;
-				case 16:
-				$wret = "TIMESTAMP";
-				break;
-				case 17:
-				$wret = "TIME";
-				break;
-				case 18:
-				$wret = "YEAR";
-				break;
-				case 19:
-				$wret = "CHAR";
-				break;
-				case 20:
-				$wret = "VARCHAR";
-				break;
-				case 21:
-				$wret = "BIT";
-				break;
-				case 22:
-				$wret = "BOOL";
-				break;
-				case 23:
-				$wret = "TINYBLOB";
-				break;
-				case 24:
-				$wret = "BLOB";
-				break;
-				case 25:
-				$wret = "MEDIUMBLOB";
-				break;
-				case 26:
-				$wret = "LONGBLOB";
-				break;
-				case 27:
-				$wret = "TINYTEXT";
-				break;
-				case 28:
-				$wret = "TEXT";
-				break;
-				case 29:
-				$wret = "MEDIUMTEXT";
-				break;
-				case 30:
-				$wret = "LONGTEXT";
-				break;
-				case 31:
-				$wret = "ENUM";
-				break;
-				case 32:
-				$wret = "SET";
-				case 33:
-				$wret = "VARCHAR(20)";
-				break;
-				case 34:
-				$wret = "VARCHAR(42)";
-				break;
-				case 35:
-				$wret = "VARCHAR(255)";
-				break;
-				case 36:
-				$wret = "GEOMETRY";
-				break;
-				case 38:
-				$wret = "LINESTRING";
-				break;
-				case 39:
-				$wret = "POLYGON";
-				break;
-				case 40:
-				$wret = "MULTIPOINT";
-				break;
-				case 41:
-				$wret = "MULTILINESTRING";
-				break;
-				case 42:
-				$wret = "MULTIPOLYGON";
-				break;
-				case 43:
-				$wret = "GEOMETRYCOLLECTION";
-				break;
-			}
+			$wret= $this->adatatype[$cod];
 			return $wret;
 		}
 		
