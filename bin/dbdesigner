@@ -8,7 +8,9 @@
 	
 	$tmp= new dbdesigner($arq);
 	
-	echo $tmp->gerasql();
+	echo $tmp->gerasql(); // criar sql completo
+	//echo $tmp->gerasql_idx(); // criar sql de indice
+	//echo $tmp->gerasql_rel(); // criar sql de relacionamento
 	file_put_contents('output.sql', $tmp->gerasql());
 	
 ?>

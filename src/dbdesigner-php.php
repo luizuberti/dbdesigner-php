@@ -24,6 +24,160 @@
 			}
 		}
 		
+		public function gerasql_rel(){
+			$xml = $this->xml;
+			
+			$tmp_relacao = $xml->METADATA->RELATIONS->RELATION;
+			$relacao = array();
+			foreach($tmp_relacao as $linha){
+				$SrcTable = (string)$xml->xpath("//METADATA/TABLES/TABLE[@ID=".(string)$linha['SrcTable']."]")[0]["Tablename"];
+				$DestTable = (string)$xml->xpath("//METADATA/TABLES/TABLE[@ID=".(string)$linha['DestTable']."]")[0]["Tablename"];
+				
+				$FKFields= str_replace("\\n","",(string)$linha['FKFields']);
+				$SrcCampo = explode("=",$FKFields)[0];
+				$DestCampo = explode("=",$FKFields)[1];
+				
+				$RefDef= explode("\\n",(string)$linha['RefDef']);
+				$Matching = explode("=",$RefDef[0])[1];
+				$OnDelete = explode("=",$RefDef[1])[1];
+				$OnUpdate = explode("=",$RefDef[2])[1];
+				
+				$relacao[(int)$linha['ID']]=array(
+				nome=>(string)$linha['RelationName'],
+				SrcTable => $SrcTable,
+				DestTable => $DestTable,
+				SrcCampo => $SrcCampo,
+				DestCampo => $DestCampo,
+				Matching => $Matching,
+				OnDelete => $OnDelete,
+				OnUpdate => $OnUpdate,
+				);
+				
+			}
+			//var_dump($relacao); die;
+			
+			$tabela = $xml->METADATA->TABLES->TABLE;
+			$sql_drop=array();
+			$areld=array();
+			$arel=array();
+			$sql="";
+			foreach ($tabela as $tabela_linha){
+				$id   = (int)$tabela_linha['ID'];
+				$nome_tabela = (string)$tabela_linha['Tablename'];
+				$atributo = ((array)$tabela_linha->attributes())["@attributes"];
+				$dado[$id] = array(tipo=>'tabela', nome => $nome_tabela , atributo => $atributo );
+				
+				// ***** colunas da tabela
+				$acol=array();
+				foreach($tabela_linha->COLUMNS->COLUMN as $coluna_linha){
+					$id   = (int)$coluna_linha['ID'];
+					$nome_coluna = (string)$coluna_linha['ColName'];
+					$atributo = ((array)$coluna_linha->attributes())["@attributes"];
+					$dado[$id] = array(tipo=>'coluna', nome => $nome_coluna , atributo => $atributo );
+					
+				}
+				
+				// ***** indice da tabela
+				$aind=array();
+				foreach($tabela_linha->INDICES->INDEX as $indice_linha){
+					$id   = (int)$indice_linha['ID'];
+					$nome_idx = (string)$indice_linha['IndexName'];
+					$atributo = ((array)$indice_linha->attributes())["@attributes"];
+					
+					$dado[$id] = array(tipo=>'indice', nome => $nome_idx , atributo => $atributo );
+				}
+				
+				// ***** Relacionamento da tabela
+				
+				$seq=0;
+				foreach($tabela_linha->RELATIONS_END->RELATION_END as $relacao_linha){
+					$id   = (int)$relacao_linha['ID'];
+					$atributo = ((array)$relacao_linha->attributes())["@attributes"];
+					
+					$dado[$id] = array(tipo=>'indice', atributo => $atributo );
+					$nome_rel =$nome_tabela."_ibfk_".(++$seq);
+					$idDatatype = $this->tipo_indice((int)$relacao_linha['IndexKind']);
+					$colindex = $dado[(int)$relacao_linha->INDEXCOLUMNS->INDEXCOLUMN['idColumn']][nome];
+					//ALTER TABLE `age_agenda`	       ADD CONSTRAINT `FK_age_agenda_arq_pasta` FOREIGN KEY (`id`) REFERENCES `arq_pasta` (`id`) ON UPDATE CASCADE ON DELETE CASCADE;
+					$areld[$nome_rel]="ALTER TABLE $nome_tabela DROP FOREIGN KEY $nome_rel;\n";
+					$arel[$nome_rel]="ALTER TABLE $nome_tabela ADD CONSTRAINT $nome_rel FOREIGN KEY(".$relacao[$id][DestCampo].") REFERENCES ".$relacao[$id][SrcTable]."(".$relacao[$id][SrcCampo].") ON DELETE ".$this->tipo_relacionamento($relacao[$id][OnDelete])." ON UPDATE ".$this->tipo_relacionamento($relacao[$id][OnUpdate]).";\n";
+					
+				}
+				
+			}
+			$sql_tabela .= implode("",$areld);
+			$sql_tabela .= implode("",$arel);
+			
+			$sql .= $sql_tabela;
+			$sql = "SET FOREIGN_KEY_CHECKS=0;\n\n\n$sql";
+			$sql = "$sql\nSET FOREIGN_KEY_CHECKS=1;\n";
+			
+			$sql = $this->convertletra($sql);
+			$sql = str_replace('\a',"'",$sql);
+			return $sql;
+		}
+		
+		public function gerasql_idx(){
+			$xml = $this->xml;
+			$tabela = $xml->METADATA->TABLES->TABLE;
+			$sql_drop=array();
+			$aindd=array();
+			$aind=array();
+			$sql="";
+			foreach ($tabela as $tabela_linha){
+				$id   = (int)$tabela_linha['ID'];
+				$nome_tabela = (string)$tabela_linha['Tablename'];
+				$atributo = ((array)$tabela_linha->attributes())["@attributes"];
+				$dado[$id] = array(tipo=>'tabela', nome => $nome_tabela , atributo => $atributo );
+				
+				// ***** colunas da tabela
+				$acol=array();
+				foreach($tabela_linha->COLUMNS->COLUMN as $coluna_linha){
+					$id   = (int)$coluna_linha['ID'];
+					$nome_coluna = (string)$coluna_linha['ColName'];
+					$atributo = ((array)$coluna_linha->attributes())["@attributes"];
+					$dado[$id] = array(tipo=>'coluna', nome => $nome_coluna , atributo => $atributo );
+					
+				}
+				
+				// ***** indice da tabela
+				
+				foreach($tabela_linha->INDICES->INDEX as $indice_linha){
+					$id   = (int)$indice_linha['ID'];
+					$nome_idx = (string)$indice_linha['IndexName'];
+					$atributo = ((array)$indice_linha->attributes())["@attributes"];
+					
+					$dado[$id] = array(tipo=>'indice', nome => $nome_idx , atributo => $atributo );
+					
+					$idDatatype = $this->tipo_indice((int)$indice_linha['IndexKind']);
+					$colindex = $dado[(int)$indice_linha->INDEXCOLUMNS->INDEXCOLUMN['idColumn']][nome];
+					
+					if($nome_idx=='PRIMARY'){
+						$aindd[]="ALTER TABLE $nome_tabela	DROP PRIMARY KEY;\n";
+						$aind[]="ALTER TABLE $nome_tabela	ADD PRIMARY KEY ($colindex);\n";
+						}else{
+						
+						//$aind[$nome_idx]="CREATE INDEX $nome_idx ON $nome_tabela ($colindex);\n";
+						$aindd[$nome_idx]="ALTER TABLE $nome_tabela DROP INDEX $nome_idx;\n";
+						$aind[$nome_idx] ="ALTER TABLE $nome_tabela ADD  INDEX $nome_idx ($colindex);\n";
+					}
+					
+				}
+				
+			}
+			$sql_tabela .= implode("",$aindd);
+			$sql_tabela .= implode("",$aind);
+			
+			$sql .= $sql_tabela;
+			
+			$sql = "SET FOREIGN_KEY_CHECKS=0;\n\n\n$sql";
+			$sql = "$sql\nSET FOREIGN_KEY_CHECKS=1;\n";
+			
+			$sql = $this->convertletra($sql);
+			$sql = str_replace('\a',"'",$sql);
+			return $sql;
+		}
+		
 		public function gerasql(){
 			$xml = $this->xml;
 			$dado=array();
