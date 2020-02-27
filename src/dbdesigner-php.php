@@ -18,10 +18,14 @@
 			$xml = $this->xml;
 			$tmp_datatype = $xml->SETTINGS->DATATYPES->DATATYPE;
 			foreach($tmp_datatype as $linha){
+				$param=count($linha->PARAMS)>0 ? json_decode(json_encode($linha->PARAMS), true) : array();
+				$opcao=count($linha->OPTIONS)>0 ? json_decode(json_encode($linha->OPTIONS), true) : array();
 				$id   = (int)$linha['ID'];
 				$nome = (string)$linha['TypeName'];
-				$this->adatatype[$id]= $nome;
+				$this->adatatype[$id]= array(nome => $nome, param => $param, opcao => $opcao );
+				
 			}
+			
 		}
 		
 		public function gerasql_rel(){
@@ -272,57 +276,65 @@
 				// ***** colunas da tabela
 				$acol=array();
 				foreach($tabela_linha->COLUMNS->COLUMN as $coluna_linha){
-				$id   = (int)$coluna_linha['ID'];
-				$nome_coluna = (string)$coluna_linha['ColName'];
-				$atributo = ((array)$coluna_linha->attributes())["@attributes"];
-				
-				$dado[$id] = array(tipo=>'coluna', nome => $nome_coluna , atributo => $atributo );
-				
-				$idDatatype = $this->tipo_coluna((int)$coluna_linha['idDatatype']);
-				
-				
-				$DatatypeParams = (string)$coluna_linha['DatatypeParams'];
-				
-				/*se o campo é nulo (1) ou não (0)*/
-				$NotNull = (string)$coluna_linha['NotNull'];
-				if($NotNull == 1){/*atribui as strings aos índices*/
-					$NotNull = "NOT NULL";
-				}
-				else{
-					$NotNull = "NULL";
-				}
-				
-				/*se o campo é auto incremento (1) ou não (0)*/
-				$AutoInc = (string)$coluna_linha['AutoInc'];
-				if($AutoInc == 1){/*atribui as strings aos índices*/
-					$AutoInc = "AUTO_INCREMENT";
-					$autoIncremento = true; /*para verificar a existência de auto incremento no final da tabela*/
-				}
-				else{
-					$AutoInc = "";
-				}
-				
-				/*se o campo é chave primária (1) ou não (0)*/
-				$PrimaryKey = (string)$coluna_linha['PrimaryKey']; 
-				if($PrimaryKey == 1){/*atribui o nome da coluna à chave primária*/
-					$chavePrimaria = $nome_coluna; /*agora já sabemos se o campo é chave primária*/
-				}
-				
-				/*se o campo é chave estrangeira (1) ou não (0)*/
-				$IsForeignKey = (string)$coluna_linha['IsForeignKey'];
-				if($IsForeignKey == 1){/*atribui o nome da coluna e do índice à chave estrangeira*/
-					$chaveEstrangeira = $nome_coluna;
-				}
-				
-				$Comments = (string)$coluna_linha['Comments'];
-				if($Comments != ""){
-					//$Comments = convertletra($Comments);
-					$Comments = "COMMENT '$Comments'";
-				}
-				
-				/*de posse de todos os dados, monta o sql das colunas*/
-				$acol[]= "  $nome_coluna $idDatatype$DatatypeParams $NotNull $AutoInc $Comments";
-				
+					$id   = (int)$coluna_linha['ID'];
+					$nome_coluna = (string)$coluna_linha['ColName'];
+					$atributo = ((array)$coluna_linha->attributes())["@attributes"];
+					
+					$dado[$id] = array(tipo=>'coluna', nome => $nome_coluna , atributo => $atributo );
+					
+					$idDatatype = $this->tipo_coluna((int)$coluna_linha['idDatatype']);
+					
+					
+					$DatatypeParams = (string)$coluna_linha['DatatypeParams'];
+					
+					/*se o campo é nulo (1) ou não (0)*/
+					$NotNull = (string)$coluna_linha['NotNull'];
+					if($NotNull == 1){/*atribui as strings aos índices*/
+						$NotNull = "NOT NULL";
+					}
+					else{
+						$NotNull = "NULL";
+					}
+					$opcoes_coluna="";
+					$i=0;
+					foreach($coluna_linha->OPTIONSELECTED->OPTIONSELECT as $key => $linha_opcao){
+						$opcoes_coluna .= $this->tipo_coluna_opcao((int)$coluna_linha['idDatatype'], $i++, (string)$linha_opcao["Value"]);
+						//var_dump($opcoes_coluna);
+						//var_dump($i++);
+						//var_dump((string)$linha_opcao["Value"]);
+						
+					}
+					/*se o campo é auto incremento (1) ou não (0)*/
+					$AutoInc = (string)$coluna_linha['AutoInc'];
+					if($AutoInc == 1){/*atribui as strings aos índices*/
+						$AutoInc = "AUTO_INCREMENT";
+						$autoIncremento = true; /*para verificar a existência de auto incremento no final da tabela*/
+					}
+					else{
+						$AutoInc = "";
+					}
+					
+					/*se o campo é chave primária (1) ou não (0)*/
+					$PrimaryKey = (string)$coluna_linha['PrimaryKey']; 
+					if($PrimaryKey == 1){/*atribui o nome da coluna à chave primária*/
+						$chavePrimaria = $nome_coluna; /*agora já sabemos se o campo é chave primária*/
+					}
+					
+					/*se o campo é chave estrangeira (1) ou não (0)*/
+					$IsForeignKey = (string)$coluna_linha['IsForeignKey'];
+					if($IsForeignKey == 1){/*atribui o nome da coluna e do índice à chave estrangeira*/
+						$chaveEstrangeira = $nome_coluna;
+					}
+					
+					$Comments = (string)$coluna_linha['Comments'];
+					if($Comments != ""){
+						//$Comments = convertletra($Comments);
+						$Comments = "COMMENT '$Comments'";
+					}
+					
+					/*de posse de todos os dados, monta o sql das colunas*/
+					$acol[]= "  $nome_coluna $idDatatype$DatatypeParams $opcoes_coluna $NotNull $AutoInc $Comments";
+					
 				}
 				
 				// ***** indice da tabela
@@ -347,9 +359,10 @@
 				
 				// ***** Relacionamento da tabela
 				$seq=0;
-				foreach($tabela_linha->RELATIONS_END->RELATION_END as $relacao_linha){
+				$lista_rel = (array)$tabela_linha->RELATIONS_END->RELATION_END;
+				foreach($lista_rel as $relacao_linha){
 					$id   = (int)$relacao_linha['ID'];
-					$atributo = ((array)$relacao_linha->attributes())["@attributes"];
+					$atributo = $relacao_linha["@attributes"];
 					
 					$dado[$id] = array(tipo=>'indice', atributo => $atributo );
 					
@@ -424,7 +437,15 @@
 		}
 		
 		public function tipo_coluna($cod){
-			$wret= $this->adatatype[$cod];
+			$wret= $this->adatatype[$cod][nome];
+			return $wret;
+		}
+		
+		public function tipo_coluna_opcao($cod, $idx, $valor){
+			if($valor==1){
+				//var_dump($this->adatatype[$cod][opcao]["OPTION"][$idx]["@attributes"]["Name"]); die;
+				$wret= $this->adatatype[$cod][opcao]["OPTION"][$idx]["@attributes"]["Name"];
+			}
 			return $wret;
 		}
 		
